@@ -103,5 +103,74 @@ def run_evaluation():
     except Exception as e:
         print(f"\n[CRITICAL FAILURE] Pipeline crashed on missing data!\nError: {e}")
 
+    # ---------------------------------------------------------
+    # INNOVATIVE TEST 1: SPATIAL OUT-OF-DISTRIBUTION (OOD)
+    # ---------------------------------------------------------
+    print("\n8. Running Innovative Test: Spatial Zone Holdout...")
+    # Get 10% of the unique traffic zones to hold out completely
+    if 'traffic_zone' in df_engineered.columns:
+        unique_zones = df_engineered['traffic_zone'].unique()
+        holdout_zones = np.random.choice(unique_zones, size=max(1, int(len(unique_zones)*0.10)), replace=False)
+        
+        # Create a strict train/val split based ON GEOGRAPHY, not time
+        spatial_train = df_engineered[~df_engineered['traffic_zone'].isin(holdout_zones)]
+        spatial_val = df_engineered[df_engineered['traffic_zone'].isin(holdout_zones)]
+        
+        y_spatial_train = spatial_train['demand']
+        X_spatial_train = spatial_train.drop(['Index', 'demand'], axis=1, errors='ignore')
+        
+        y_spatial_val = spatial_val['demand']
+        X_spatial_val = spatial_val.drop(['Index', 'demand'], axis=1, errors='ignore')
+        
+        try:
+            # We must retrain the pipeline briefly on this spatial split
+            spatial_pipeline = TrafficModel()
+            spatial_pipeline.train(X_spatial_train, y_spatial_train, X_spatial_val, y_spatial_val)
+            spatial_preds = spatial_pipeline.predict(X_spatial_val)
+            
+            calculate_metrics(y_spatial_val, spatial_preds, f"STRESS TEST: UNSEEN SPATIAL ZONES {holdout_zones}")
+        except Exception as e:
+            print(f"Spatial Holdout failed: {e}")
+
+    # ---------------------------------------------------------
+    # INNOVATIVE TEST 2: THE BLACK SWAN (EXTREME WEATHER)
+    # ---------------------------------------------------------
+    print("\n9. Running Innovative Test: The Black Swan Weather Event...")
+    if 'Weather' in val_df.columns:
+        # Filter validation set to ONLY bad weather or extreme temps
+        extreme_mask = val_df['Weather'].isin(['Rainy', 'Foggy', 'Snowy']) 
+        
+        y_val_extreme = y_val[extreme_mask]
+        X_val_extreme = X_val[extreme_mask]
+        
+        if len(y_val_extreme) > 0:
+            extreme_preds = pipeline.predict(X_val_extreme)
+            calculate_metrics(y_val_extreme, extreme_preds, "STRESS TEST: SEVERE WEATHER EVENTS ONLY")
+        else:
+            print("   -> No severe weather events found in the validation time split.")
+
+    # ---------------------------------------------------------
+    # INNOVATIVE TEST 3: FEATURE AMNESIA (MEMORY ABLATION)
+    # ---------------------------------------------------------
+    print("\n10. Running Innovative Test: Memory Feature Amnesia...")
+    # We test what happens if the historical target encoding completely fails
+    X_val_amnesia = X_val.copy()
+    
+    # We intercept the prediction process. 
+    # Let's manually apply the mapping, then corrupt it, then feed it directly to the inner CatBoost model
+    try:
+        X_val_amnesia_mapped = pipeline._apply_historical_mapping(X_val_amnesia)
+        
+        # CORRUPT THE MEMORY: Overwrite it with the global median (simulating a total lookup failure)
+        X_val_amnesia_mapped['historical_local_demand'] = pipeline.global_median_demand
+        
+        # Predict directly using the underlying model to bypass the pipeline's safety net
+        amnesia_preds = pipeline.model.predict(X_val_amnesia_mapped)
+        amnesia_preds = np.clip(amnesia_preds, a_min=0, a_max=None)
+        
+        calculate_metrics(y_val, amnesia_preds, "STRESS TEST: HISTORICAL MEMORY FAILURE")
+    except Exception as e:
+        print(f"Amnesia test failed: {e}")
+
 if __name__ == "__main__":
     run_evaluation()
