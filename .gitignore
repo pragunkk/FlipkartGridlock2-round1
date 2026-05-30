@@ -121,7 +121,6 @@ Thumbs.db
 *.log
 
 # dataset and outputs
-*.csv
 *.xlsx
 *.json
 *.parquet
