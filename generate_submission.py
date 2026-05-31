@@ -38,11 +38,11 @@ print("\n--- INITIATING THE ULTIMATE HEAVYWEIGHT ENSEMBLE ---")
 print("Training Model 1/3: CatBoost...")
 cb_model = CatBoostRegressor(
     iterations=2500,           
-    learning_rate=0.04,        
-    depth=7,                   
-    l2_leaf_reg=4,             
-    bagging_temperature=0.2,   
-    random_strength=0.5,       
+    learning_rate=0.07615086613647025,        
+    depth=4,                   
+    l2_leaf_reg=1.0136657632268968,             
+    bagging_temperature=0.5637139679053852,   
+    random_strength=0.58442350214666,       
     eval_metric='R2',
     random_seed=42,
     verbose=0 
