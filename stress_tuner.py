@@ -87,7 +87,7 @@ print("\n--- Starting Automated Stress-Test Tuning ---")
 study = optuna.create_study(direction='maximize')
 
 # n_trials=50 means it will run the loop 50 times automatically
-study.optimize(objective, n_trials=50)
+study.optimize(objective, n_trials=100)
 
 print("\n==========================================")
 print(" TUNING COMPLETE")
